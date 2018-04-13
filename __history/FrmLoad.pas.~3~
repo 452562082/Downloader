@@ -1,0 +1,846 @@
+unit FrmLoad;
+
+interface
+
+uses
+  Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
+  ActiveX, Dialogs, UnitConfig, DUIBase, DUIBitmap32, DUIContainer, DUIManager,
+  DUIButton, DUIImage, DUIGraphics, DUICore, DUILabel, UnitFuc, ExtCtrls, msxml,
+  MD5Unit, UnitType, HttpDowner, UnitError, AppEvnts, UnitStat, ComObj, HTTPApp;
+
+const
+  
+  THREAD_DOWNLOAD_XML = 1;
+  
+  EVENT_DOWNLOAD_XML_OK = 1;
+  EVENT_THREAD_END = 2;
+  EVENT_DOWNAPI = 3;
+
+type
+  TDownloadThreadEventParam = record
+    str: string;
+    strout: string;
+    tag: Integer;
+    Cancel: Boolean;
+  end;
+
+  TDownloadThreadEvent = procedure(Sender: TObject;
+    var AParam: TDownloadThreadEventParam) of object;
+
+  TDownloadThreadParam = record
+    Owner: THandle;
+    scType: Integer;
+    scEvent: TDownloadThreadEvent;
+  public
+    procedure ToDefault();
+  end;
+
+  TDownloadThread = class(TThread)
+  private
+    
+    FEventParam: TDownloadThreadEventParam;
+    FParam: TDownloadThreadParam;
+  protected
+    procedure Execute; override;
+    procedure RaiseEvent();
+  public
+    constructor Create(Param: TDownloadThreadParam);
+  end;
+
+type
+  TFFrmLoad = class(TForm)
+    tmr1: TTimer;
+    aplctnvnts1: TApplicationEvents;
+    procedure FormCreate(Sender: TObject);
+    procedure tmr1Timer(Sender: TObject);
+  private
+    
+    FUIManager: TDUIManager;
+    FImgBk: TDUIImage;
+    FBtnClose: TDUIButton;
+    FLabel: TDUILabel;
+    
+    FApiXmlUrl: string;
+    FDownloadApi: Boolean;
+    FDownApiID: DWORD;
+    procedure CreateParams(var Params: TCreateParams); override;
+    procedure WndProc(var nMsg: TMessage); override;
+    
+    procedure UIOnMouseDown(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
+    procedure UIOnClick(Sender: TObject);
+    
+    procedure DownloadThreadEvent(Sender: TObject;
+      var AParam: TDownloadThreadEventParam);
+    procedure LoadWebXmlApi();
+  public
+
+  end;
+
+var
+  FFrmLoad: TFFrmLoad;
+
+implementation
+
+{$R *.dfm}
+
+uses
+  FrmMain,FrmADV;
+
+procedure TFFrmLoad.CreateParams(var Params: TCreateParams);
+begin
+  inherited CreateParams(Params);
+  StringToArray(Params.WinClassName, MutexName);
+end;
+
+procedure TFFrmLoad.DownloadThreadEvent(Sender: TObject;
+  var AParam: TDownloadThreadEventParam);
+var
+  Daram: HttpFtpDownloaderParams;
+  paramadv: HTTP_FTP_DOWNLOADER_ADDITIONAL_PARAMS;
+  state: HttpFtp_DOWNLOADER_STATE;
+  strmem: TStringStream;
+begin
+  case AParam.tag of
+    EVENT_DOWNLOAD_XML_OK:
+      begin
+        Self.Hide;
+        if not Assigned(FFrmMain) then
+          Application.CreateForm(TFFrmMain, FFrmMain);
+          FFrmMain.Show;
+          Application.CreateForm(TFFrmADV, FFrmADV);
+          FFrmADV.Show;
+      end;
+    EVENT_THREAD_END:
+      begin
+        if (not bLoadXmlOk) then
+        begin
+          Self.Hide;
+          Application.Terminate;
+        end;
+      end;
+    EVENT_DOWNAPI:
+      begin
+        if FApiXmlUrl = '' then
+        begin
+          
+          FApiXmlUrl := AParam.str;
+          
+          FDownloadApi := True;
+
+          Daram.bAutoName := True;
+          Daram.url := PAnsiChar(AnsiString(FApiXmlUrl));
+          Daram.saveFolder := PAnsiChar(AnsiString(WorkPath));
+          Daram.fileName := PAnsiChar(AnsiString('softinfo.xml'));
+
+          FillChar(paramadv, SizeOf(paramadv), #0);
+          paramadv.referer := nil;
+          paramadv.authUserName := nil;
+          paramadv.authPassword := nil;
+          paramadv.statusFile := nil;
+          paramadv.iFtpUsePassiveMode := -1;
+          paramadv.maxSections := 1;
+
+          HttpFtp_Downloader_Initialize(@Daram, @FDownApiID, @paramadv);
+          if FDownApiID <= 0 then
+          begin
+            AParam.Cancel := True;
+          end;
+        end
+        else
+        begin
+          if FDownApiID <= 0 then
+          begin
+            AParam.Cancel := True;
+          end
+          else
+          begin
+            state := HttpFtp_Downloader_GetState(FDownApiID);
+            case state of
+              
+              HttpFtp_DLSTATE_FAIL:
+                begin
+                  AParam.Cancel := True;
+                  HttpFtp_Downloader_Release(FDownApiID, 0);
+                end;
+              HttpFtp_DLSTATE_DOWNLOADED:
+                begin
+                  HttpFtp_Downloader_Release(FDownApiID, 0);
+                  strmem := TStringStream.Create('', TEncoding.UTF8);
+                  try
+                    strmem.LoadFromFile(WorkPath + 'softinfo.xml');
+                    AParam.strout := strmem.DataString;
+                  finally
+                    AParam.Cancel := True;
+                    strmem.Free;
+                  end;
+                end;
+            end;
+          end;
+        end;
+      end;
+  end;
+end;
+
+procedure TFFrmLoad.FormCreate(Sender: TObject);
+var
+  DownParam: TDownloadThreadParam;
+begin
+  FApiXmlUrl := '';
+  FDownApiID := 0;
+  FDownloadApi := False;
+
+  Self.Caption := AppName;
+  Self.Icon := Application.Icon;
+  Self.SetBounds(Left, Top, FrmLoadWidth, FrmLoadHeight);
+  FUIManager := TDUIManager.Create(Self);
+  with FUIManager do
+  begin
+    IsLoading := True;
+
+    Attach(Self.Handle, Rect(0, 0, Self.Width, Self.Height));
+    FUIManager.UseBack := True;
+    FUIManager.BackColor := $FFFF0000;
+
+    FImgBk := TDUIImage.Create(FUIManager);
+    FImgBk.Bitmap := LoadBmpByName('load_bk');
+    FImgBk.SetBounds(0, 0, Width, Height);
+    FImgBk.OnMouseDown := UIOnMouseDown;
+
+    FBtnClose := TDUIButton.Create(FUIManager);
+    FBtnClose.BtnStateCount := 3;
+    FBtnClose.BtnImage := LoadBmpByName('btn_close');
+    FBtnClose.DoAutoSize;
+    FBtnClose.SetSite(Width - FBtnClose.Width, 0);
+    FBtnClose.OnClick := UIOnClick;
+
+    FLabel := TDUILabel.Create(FUIManager);
+    FLabel.Caption := '正在使用p2p加速模式选择最佳下载线路';
+    FLabel.DoAutoSize;
+    FLabel.SetSite((Width - FLabel.Width) div 2, 60);
+
+    FLabel := TDUILabel.Create(FUIManager);
+    FLabel.Caption := '请稍后.';
+    FLabel.tag := 1;
+    FLabel.DoAutoSize;
+    FLabel.SetSite((Width - FLabel.Width) div 2, 90);
+
+    IsLoading := False;
+    Refresh;
+  end;
+
+  tmr1.Enabled := True;
+
+  DownParam.Owner := Self.Handle;
+  DownParam.scType := THREAD_DOWNLOAD_XML;
+  DownParam.scEvent := Self.DownloadThreadEvent;
+  TDownloadThread.Create(DownParam);
+end;
+
+procedure TFFrmLoad.LoadWebXmlApi;
+begin
+
+end;
+
+procedure TFFrmLoad.tmr1Timer(Sender: TObject);
+var
+  tmpStr: string;
+  i: Integer;
+begin
+  if Assigned(FLabel) then
+  begin
+    FLabel.tag := FLabel.tag + 1;
+    if FLabel.tag > 6 then
+      FLabel.tag := 1;
+    tmpStr := '请稍后';
+    for i := 0 to FLabel.tag - 1 do
+      tmpStr := tmpStr + '.';
+    FLabel.Caption := tmpStr;
+    FLabel.Refresh;
+  end;
+end;
+
+procedure TFFrmLoad.UIOnClick(Sender: TObject);
+begin
+  if Sender = FBtnClose then
+  begin
+    ErrorNum := S_ERR_LOADCLOSE;
+    Self.Hide;
+    if (NeedSendStat()) then
+    begin
+      statManager.PushStat(sevent_mouse, Format(
+          'type=click&content=btn_load_close&value=', []));
+      statManager.PushStat(sevent_window, Format('type=close&step=%d',
+          [StepNumber]));
+    end;
+
+    Application.Terminate;
+  end;
+end;
+
+procedure TFFrmLoad.UIOnMouseDown(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
+begin
+  if Sender = FImgBk then
+  begin
+    PostMessage(Self.Handle, WM_LBUTTONUP, 0, 0);
+    PostMessage(Self.Handle, WM_SYSCOMMAND, 61458, 0);
+  end;
+end;
+
+procedure TFFrmLoad.WndProc(var nMsg: TMessage);
+begin
+  case nMsg.Msg of
+    USER_QueryMutex:
+      begin
+        if not bInstallEd then
+        begin
+          nMsg.Result := 1;
+          if Assigned(FFrmMain) then
+          begin
+            FFrmMain.SetSysFocus(True);
+          end;
+          Exit;
+        end;
+      end;
+  end;
+  inherited;
+end;
+
+constructor TDownloadThread.Create(Param: TDownloadThreadParam);
+begin
+  FParam := Param;
+  inherited Create(False);
+  FreeOnTerminate := True;
+end;
+
+procedure TDownloadThread.Execute;
+const
+  GET_NUM = 3;
+var
+  
+  WebXml: IXMLDOMDocument2;
+  
+  NodeList: IXMLDOMNodeList;
+  Node, TmpNode, TmpNode2: IXMLDOMNode;
+  TaskNode: IXMLDOMNode;
+  tmpStr, TmpUrl: string;
+  i: Integer;
+  SoftXml: IXMLDOMDocument2;
+  TaskIn: TTaskInfo;
+  prtaskset, prtset: Cardinal;
+  
+  function ExtractAltTask(const AltID: Integer = -1): TTaskInfo;
+  var
+    j, k: Integer;
+  begin
+    Result.ToZero;
+    if AltID >= 0 then 
+    begin
+      for j := 0 to TaskAltList.Count - 1 do
+      begin
+        if TaskAltList.Items[j].taskid = AltID then
+        begin
+          if (not CheckTaskRepeat(TaskAltList.Items[j])) then
+          begin
+            Result := TaskAltList.Items[j];
+            TaskAltList.Delete(j);
+            Exit;
+          end
+          else
+            TaskAltList.Delete(j);
+        end;
+      end;
+    end;
+    for j := 0 to TaskAltList.Count - 1 do
+    begin
+      if (bAlterRank) then
+        k := 0
+      else
+      begin
+        
+        Randomize;
+        k := Random(TaskAltList.Count);
+      end;
+
+      if not(CheckTaskRepeat(TaskAltList.Items[k])) then
+      begin
+        Result := TaskAltList.Items[k];
+        TaskAltList.Delete(k);
+        Exit;
+      end
+      else
+        TaskAltList.Delete(k);
+    end;
+  end;
+
+  function InitTask(var ATask: TTaskInfo): Boolean;
+  var
+    tmpName: string;
+  begin
+    Result := False;
+    
+    if IsHttpUrl(ATask.logoUrl) then
+    begin
+      tmpName := WorkPath + GetUrlFileName(ATask.logoUrl);
+      tmpName := GetSoleFileName(tmpName);
+      if UrlDownloadFile(ATask.logoUrl, tmpName) then
+      begin
+        ATask.logopath := tmpName;
+        Result := True;
+      end;
+    end;
+    
+    Refershow := AddSpliteString(Refershow, IntToStr(ATask.taskid));
+  end;
+
+  procedure CheckTaskPage(ANode: IXMLDOMNode);
+
+  var
+    PageNum: Integer;
+    test: Integer;
+    Childs: IXMLDOMNodeList;
+    j: Integer;
+    PTaskIn: TTaskInfo;
+  begin
+    if not Assigned(ANode) then
+      Exit;
+    try
+      PageNum := StrToIntDef(ANode.attributes.getNamedItem('page').text, 0) - 1;
+
+      //if (PageNum >= 0) and (PageNum <= length(TaskList) - 1) and
+      if (PageNum >= 0) and (PageNum <= length(TaskList) + 1) and
+        (ANode.hasChildNodes) then
+      begin
+        Childs := ANode.childNodes;
+        for j := 0 to Childs.length - 1 do
+        begin
+          PTaskIn.ToZero;
+          if ExtractTaskInfo(Childs.item[j], PTaskIn) then
+          begin
+            if PageNum = 4 then
+            begin
+              //ADVInfo.TopADVInfo[j] := pTaskIn;
+              if ADVInfo.TopADVInfo = nil then
+                ADVInfo.TopADVInfo := (TList<TTaskInfo>).Create;
+
+              ADVInfo.TopADVInfo.Add(pTaskIn);
+              Exit;
+            end;
+
+            if PageNum = 5 then
+            begin
+              ADVInfo.SideADVInfo := pTaskIn;
+              Exit;
+            end;
+
+            if PTaskIn.detectitem <> '' then
+            begin
+              if CheckTaskInstalled(PTaskIn.detectitem) then
+                
+              else
+              begin
+                
+                if (PageNum <> 3) then
+                  PTaskIn := ExtractAltTask(PTaskIn.AltID)
+                else
+                  PTaskIn.ToZero;
+              end;
+            end;
+
+            if CheckTaskRepeat(PTaskIn) then 
+            begin
+              
+              if (PageNum <> 3) then
+                PTaskIn := ExtractAltTask(PTaskIn.AltID)
+              else
+                PTaskIn.ToZero;
+            end;
+            if (PTaskIn.taskid >= 0) and (PTaskIn.taskurl <> '') then
+            begin
+              InitTask(PTaskIn);
+              TaskList[PageNum].Add(PTaskIn);
+            end;
+          end;
+        end;
+      end;
+    except
+    end;
+  end;
+
+  function GetSoftInfo(): Boolean;
+  var
+    sdsoft: string;
+    TmpUrl: string;
+    tmpStr: string;
+    strinfo: string;
+    i: Integer;
+  begin
+    Result := False;
+    
+    if bUploadSafeSoft then
+      sdsoft := '&sdsoft=' + IntToStr(GetSDState())
+    else
+      sdsoft := '';
+    
+    strinfo := '&webid=' + WebInfo.id + '&softid=' + SoftInfo.softid +
+      '&ver=' + VersionStr + '&usesnum=' + IntToStr(nUsesNumber)
+      + '&mac=' + MacStr + '&filename=' + HTTPApp.HTTPEncode
+      (ExtractFileName(ParamStr(0))) + '&errcode=' + IntToStr(ErrorNum)
+      + '&userev=' + IntToStr(hUserEV) + '&rnd=' + IntToStr(Random(10000));
+
+    TmpUrl := QueryWebUrl + WebInfo.id + TaskXmlExt + '?winver=' + IntToStr
+      (SysUtils.Win32MajorVersion) + '.' + IntToStr
+      (SysUtils.Win32MinorVersion) + sdsoft + strinfo;
+    TmpUrl := (URLEncode(TmpUrl));
+
+    tmpStr := '';
+    for i := 0 to GET_NUM - 1 do
+      if Trim(tmpStr) = '' then
+        tmpStr := GetWebString(TmpUrl, False, True, True);
+    if Trim(tmpStr) = '' then
+      ErrorNum := S_ERR_LOADXML
+    else
+    begin
+
+      WebXml := CoDOMDocument.Create;
+      if not WebXml.loadXML(tmpStr) then
+        ErrorNum := S_ERR_ANALYXML
+      else
+      begin
+        WebInfo.strXML := tmpStr;
+        
+        Node := WebXml.selectSingleNode('/root/web');
+        if Assigned(Node) then
+        begin
+          WebInfo.name := Node.selectSingleNode('name').text;
+          WebInfo.tag := Node.selectSingleNode('tag').text;
+          WebInfo.XmlUrl := Node.selectSingleNode('xmlurl').text;
+          WebInfo.logoUrl := Node.selectSingleNode('logourl').text;
+          
+          try
+            TmpNode := Node.selectSingleNode('firstlevelcity');
+            if Assigned(TmpNode) then
+              bFirstLevelCity := StrToBool(TmpNode.text);
+
+            TmpNode := Node.selectSingleNode('search');
+            if Assigned(TmpNode) then
+              WebInfo.search := Node.selectSingleNode('search').text
+            else
+              WebInfo.search := '';
+          except
+          end;
+
+        end;
+        
+        if Trim(WebInfo.XmlUrl) <> '' then
+        begin
+          TmpUrl := AddUrlParams(WebInfo.XmlUrl,
+            'webid=' + WebInfo.id + '&softid=' + SoftInfo.softid + '&token=' +
+              LowerCase(MD5S(WebInfo.tag + '_' + SoftInfo.softid)));
+
+          tmpStr := '';
+          FEventParam.tag := EVENT_DOWNAPI;
+          FEventParam.str := TmpUrl;
+          FEventParam.Cancel := False;
+          FEventParam.strout := '';
+          try
+            for i := 0 to GET_NUM - 1 do
+              if Trim(tmpStr) = '' then
+                tmpStr := GetWebString(TmpUrl, False, True, True);
+          except
+          end;
+
+          if Trim(tmpStr) = '' then
+            ErrorNum := S_ERR_LOADAPI
+          else
+          begin
+            SoftInfo.strXML := tmpStr;
+            SoftXml := CoDOMDocument.Create;
+            if not SoftXml.loadXML(tmpStr) then
+              ErrorNum := S_ERR_ANALYAPI
+            else
+            begin
+              NodeList := SoftXml.documentElement.childNodes;
+              if Assigned(NodeList) then
+              begin
+                for i := 0 to NodeList.length - 1 do
+                begin
+                  Node := NodeList.item[i];
+                  if Assigned(Node) then
+                  begin
+                    tmpStr := LowerCase(Node.nodeName);
+                    if tmpStr = 'softname' then
+                      SoftInfo.softname := Node.text
+                    else if tmpStr = 'version' then
+                      SoftInfo.version := Node.text
+                    else if tmpStr = 'softsize' then
+                      SoftInfo.softsize := Node.text
+                    else if tmpStr = 'softexp' then
+                      SoftInfo.softexp := Node.text
+                    else if tmpStr = 'language' then
+                      SoftInfo.language := Node.text
+                    else if tmpStr = 'filename' then
+                      SoftInfo.fileName := Node.text
+                    else if tmpStr = 'logourl' then
+                      SoftInfo.logoUrl := Node.text
+                    else if tmpStr = 'describe' then
+                      SoftInfo.describe := Node.text
+                    else if tmpStr = 'downsrc' then
+                      SoftInfo.UrlList.Add(Node.text)
+                    else if tmpStr = 'downrefer' then
+                      SoftInfo.downrefer := Node.text
+                    else if tmpStr = 'unpackpwd' then
+                      SoftInfo.unpackpwd := Node.text
+                  end;
+                end;
+                if SoftInfo.UrlList.Count < 1 then
+                  ErrorNum := S_ERR_NULLDOWNURL;
+              end;
+            end;
+            if (SoftInfo.UrlList.Count >= 1) then
+              Result := True;
+          end;
+        end;
+      end;
+    end;
+  end;
+
+var
+  sdsoft: string;
+  bGetXML: Boolean;
+  tmpMd5: string;
+  r2url, r2webstr: string;
+  r2web: IXMLDOMDocument2;
+  r2Node: IXMLDOMNode;
+begin
+  try
+    CoInitialize(nil);
+
+    bGetXML := GetSoftInfo();
+    if not bGetXML then
+    begin
+      WebInfo.id := APIErrWebID;
+      bGetXML := GetSoftInfo();
+    end;
+    
+    if bGetXML then
+    begin
+      try
+        
+        TmpNode := WebXml.selectSingleNode('/root/task/libmem');
+        if Assigned(TmpNode) then
+        begin
+          if Assigned(TmpNode.attributes.getNamedItem('url')) and Assigned
+            (TmpNode.attributes.getNamedItem('md5')) then
+          begin
+            TmpUrl := TmpNode.attributes.getNamedItem('url').nodeValue;
+            tmpMd5 := TmpNode.attributes.getNamedItem('md5').nodeValue;
+            if IsHttpUrl(TmpUrl) then
+            begin
+              if RMManager.LoadFromUrl(TmpUrl, tmpMd5, True) then
+              begin
+                if (RMManager.IsLoaded) then
+                begin
+                  
+                  RMManager.RMInit(WebInfo.id, SoftInfo.softid);
+                  
+                  if (RMManager.RMGetWebXml(WebInfo.strXML)) and
+                    (IsXmlStr(WebInfo.strXML)) then
+                    WebXml.loadXML(WebInfo.strXML);
+                  
+                  if (RMManager.RMRMGetSoftXml(SoftInfo.strXML)) then
+                  begin
+                  end;
+                end;
+              end;
+            end;
+          end;
+        end;
+        
+        r2url := RemoteModuleUrl + '?webid=' + WebInfo.id + '&softid=' +
+          SoftInfo.softid + '&ver=' + VersionStr;
+        r2webstr := GetWebString(r2url, False, True, True);
+        if Trim(r2webstr) <> '' then
+        begin
+          r2web := CoDOMDocument.Create;
+          if (r2web.loadXML(r2webstr) and Assigned(r2web.documentElement)) then
+          begin
+            r2Node := r2web.documentElement.selectSingleNode('data');
+            if Assigned(r2Node) then
+              TmpUrl := r2Node.text;
+            r2Node := r2web.documentElement.selectSingleNode('hash');
+            if Assigned(r2Node) then
+              tmpMd5 := r2Node.text;
+            if IsHttpUrl(TmpUrl) then
+            begin
+              if RMManager2.LoadFromUrl(TmpUrl, tmpMd5, True) then
+              begin
+                if (RMManager2.IsLoaded) then
+                begin
+                  
+                  RMManager2.RMInit(WebInfo.id, SoftInfo.softid);
+                  
+                  if (RMManager2.RMGetWebXml(WebInfo.strXML)) and
+                    (IsXmlStr(WebInfo.strXML)) then
+                    WebXml.loadXML(WebInfo.strXML);
+                  
+                  if (RMManager2.RMRMGetSoftXml(SoftInfo.strXML)) then
+                  begin
+
+                  end;
+                end;
+              end;
+            end;
+          end;
+        end;
+      except
+      end;
+      
+      TaskNode := WebXml.selectSingleNode('/root/task');
+      TmpNode := TaskNode.selectSingleNode('ChkCapColor');
+      if Assigned(TmpNode) then
+        ChkCapColor := StrToInt64(TmpNode.text);
+      
+      TaskNode := WebXml.selectSingleNode('/root/task');
+      TmpNode := TaskNode.selectSingleNode('ChkTipColor');
+      if Assigned(TmpNode) then
+        ChkTipColor := StrToInt64(TmpNode.text);
+      
+      TmpNode := TaskNode.selectSingleNode('taskset');
+      if Assigned(TmpNode) then
+      begin
+        try
+          prtaskset := StrToInt64(TmpNode.text);
+
+          bForceInstall := (prtaskset and 1) <> 0;
+          bChangeLnk := (prtaskset and 2) <> 0;
+          bLockHomePage := (prtaskset and 4) <> 0;
+          bOpenFolderInstall := (prtaskset and 8) <> 0;
+          bShowGrayChk := (prtaskset and 16) <> 0;
+          bHideExtend := (prtaskset and 32) <> 0;
+          bDisableClose := (prtaskset and 64) <> 0;
+          bUseCityRule := (prtaskset and 128) <> 0;
+          bDownHideToTask := (prtaskset and 256) <> 0;
+          bDownToDesktop := (prtaskset and 512) <> 0;
+          bLockTaskBar := (prtaskset and 1024) <> 0;
+          bSwitchIELast := (prtaskset and 2048) <> 0;
+          bInduceExit := (prtaskset and 4096) <> 0;
+          bAlterRank := (prtaskset and 8192) <> 0;
+          bExitInduceStart := (prtaskset and 16384) <> 0;
+          bDebugReport := (prtaskset and 32768) <> 0;
+          bSwitchBtnYes := (prtaskset and 65536) <> 0;
+          bLastTaskSiteDown := (prtaskset and 131072) <> 0;
+          bShowTaskItemText := (prtaskset and 262144) <> 0;
+          bReplace360Browser := (prtaskset and 524288) <> 0;
+
+          if (bReplace360Browser) then
+            BrowserRuleString := BrowserRuleString +
+              '|360安全浏览器*=360se.exe|360极速浏览器=360chrome.exe';
+        except
+        end;
+      end;
+      
+      if bDebugReport then
+      begin
+        try
+          statManager := TStatManager.Create;
+          statManager.userid := LowerCase(MD5S(MacStr + 'RIYUEDOWNER'));
+          statManager.token := LowerCase(MD5S(statManager.userid + 'token'));
+          statManager.Session := LowerCase(MD5S(CreateClassID()));
+          statManager.StartStat();
+          
+          statManager.PushStat(sevent_signup, Format(
+              'sdsoft=%d&system=%s&mac=%s&ie=%s&isdeveloper=%s&webid=%s&softid=%s&filename=%s&filesize=%s&filemd5=%s', [GetSDState(), IntToStr(SysUtils.Win32MajorVersion) + '.' + IntToStr(SysUtils.Win32MinorVersion), MacStr, IEVersionStr, BoolToStr(bIsDeveloper), WebInfo.id, SoftInfo.softid, HTTPApp.HTTPEncode(ExtractFileName(ParamStr(0))), IntToStr(FileSize(ParamStr(0))), LowerCase(MD5F(ParamStr(0)))]));
+        except
+        end;
+      end;
+
+      TmpNode := TaskNode.selectSingleNode('alternative');
+      if TmpNode.hasChildNodes then
+      begin
+        NodeList := TmpNode.childNodes;
+        for i := 0 to NodeList.length - 1 do
+        begin
+          if ExtractTaskInfo(NodeList.item[i], TaskIn) then
+            TaskAltList.Add(TaskIn);
+        end;
+      end;
+
+      NodeList := TaskNode.selectNodes('taskgroup');
+      if Assigned(NodeList) then
+        for i := 0 to NodeList.length - 1 do
+        begin
+          CheckTaskPage(NodeList.item[i]);
+        end;
+
+      ADVInfo.materialPlace := TaskNode.selectSingleNode('materialPlace').text;
+      ADVInfo.imgPlace := TaskNode.selectSingleNode('imgPlace').text;
+      ADVInfo.adStatus := TaskNode.selectSingleNode('adStatus').text;
+      ADVInfo.slide := TaskNode.selectSingleNode('slide').text;
+
+      NodeList := TaskNode.selectNodes('adweburl/url');
+      if Assigned(NodeList) then
+        for i := 0 to NodeList.length - 1 do
+          if i < length(adweburl) then
+          begin
+            adweburl[i] := NodeList.item[i].text;
+          end;
+      
+      Node := TaskNode.selectSingleNode('onclose/url');
+      if Assigned(Node) then
+        oncloseUrl := Node.text;
+      
+      Node := TaskNode.selectSingleNode('regmodule');
+      if Assigned(Node) then
+        RegModuleStr := Node.xml;
+      
+      bLoadXmlOk := True;
+      if (ErrorNum <> S_ERR_LOADCLOSE) then
+      begin
+        FEventParam.tag := EVENT_DOWNLOAD_XML_OK;
+        Synchronize(RaiseEvent);
+      end;
+      
+    end;
+    
+    if (not bLoadXmlOk) and bForceOpenSoft then
+    begin
+      
+      bLoadXmlOk := True;
+      if (ErrorNum <> S_ERR_LOADCLOSE) then
+      begin
+        FEventParam.tag := EVENT_DOWNLOAD_XML_OK;
+        Synchronize(RaiseEvent);
+      end;
+    end;
+    
+    if (NeedSendStat()) then
+    begin
+      statManager.PushStat(sevent_info, Format('type=show&value=%s',
+          [Refershow]));
+      statManager.PushStat(sevent_info, Format('type=repeat&value=%s',
+          [Referrepeat]));
+    end;
+    CoUninitialize;
+  except
+    ErrorNum := S_ERR_XMLCATCH;
+  end;
+  FEventParam.tag := EVENT_THREAD_END;
+  Synchronize(RaiseEvent);
+end;
+
+procedure TDownloadThread.RaiseEvent;
+begin
+  if Assigned(FParam.scEvent) then
+    FParam.scEvent(nil, FEventParam);
+end;
+
+procedure TDownloadThreadParam.ToDefault;
+begin
+  scType := 0;
+  scEvent := nil;
+end;
+
+end.
+ 

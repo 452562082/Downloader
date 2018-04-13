@@ -1,0 +1,230 @@
+unit TopADVBody;
+
+interface
+
+uses
+  Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
+  Dialogs, OleCtrls, SHDocVw_EWB, EwbCore, msxml, UnitFuc, UnitConfig, DUIBase,
+  DUIBitmap32, DUIContainer, DUIManager, DUIButton, DUIImage, DUIGraphics,
+  DUICore, DUILabel, DUIType, GR32, DUILabelEx, DUIConfig, StdCtrls,
+  DUITaskItem, DUICheck, EmbeddedWB, MD5Unit, ShellAPI, Generics.Collections,
+  UnitType, Masks, Registry, {$IFDEF USE_XLSDK} XlDownUnit, MMSystem,
+{$ELSE} HttpDowner, {$ENDIF} ExtCtrls, AppEvnts, Menus, FrmInstall,
+  RemoteModule, UnitStat, GifImg, jpeg, pngimage, IdBaseComponent, IdComponent,
+  IdTCPConnection, IdTCPClient, IdHTTP;
+
+type
+  TFTopADVBody = class(TForm)
+    procedure FormCreate(Sender: TObject);
+  private
+    procedure UIOnClick(Sender: TObject);
+  private
+    //FUIManager: TDUIManager;
+    //FContainer: array [0 .. 2] of TDUIContainer;
+    //FImgBk: TDUIImage;
+    textADV: TLabel;
+  public
+
+  end;
+
+var
+  FTopADVBody: TFTopADVBody;
+
+implementation
+
+{$R *.dfm}
+uses
+  FrmMain;
+
+procedure TFTopADVBody.FormCreate(Sender: TObject);
+var
+  jpg_bk: TJPEGImage;
+  gifADV: TGIFImage;
+  //jpgADV: TJPEGImage;
+  pngADV: TPngImage;
+  FStream : TResourceStream;
+  imagestream : TMemoryStream;
+  fhttpRequest: TIdHTTP;
+begin
+  Self.Parent := FFrmMain;
+  Self.BorderStyle := bsNone;
+  Self.Position := poDesigned;
+  if (SameText(ADVInfo.imgPlace,'1')) then
+    Self.SetBounds(FrmADVBodyWidth + 420, 2, 100, 30)
+  else
+    Self.SetBounds(420, 2, 100, 30);
+
+  with TImage.Create(Self) do
+  begin
+    Parent := Self;
+    SetBounds(0,0,100,30);
+    jpg_bk := TJPEGImage.Create;
+    FStream := TResourceStream.Create(hInstance,'top_bk',RT_RCDATA) ;
+    jpg_bk.LoadFromStream(FStream);
+    Picture.Bitmap.Assign(jpg_bk);
+    jpg_bk.Free;
+  end;
+
+  if ADVInfo.TopADVInfo[1].tasktype = tstextlink then
+  begin
+    textADV := TLabel.Create(self);
+    textADV.Parent := self;
+    Cursor:=crHandpoint;
+    textADV.SetBounds(0,5,100,30);
+    textADV.Caption := ADVInfo.TopADVInfo[0].taskname;
+    textADV.Font.Size := 10;
+    textADV.Font.Name := '微软雅黑';
+    OnClick := UIOnClick;
+    //textADV.Font.Style := [fsBold];
+  end
+  else if ADVInfo.TopADVInfo[1].tasktype = tsimglink then
+  begin
+    imagestream := TMemoryStream.Create();
+    fhttpRequest := TIdHTTP.Create(nil);
+    with fhttpRequest do
+    begin
+      ProtocolVersion := pv1_1;
+      AllowCookies := True;
+      ProxyParams.BasicAuthentication := False;
+      ProxyParams.ProxyPort := 0;
+      Request.ContentLength := -1;
+      Request.ContentRangeEnd := -1;
+      Request.ContentRangeStart := -1;
+      Request.ContentRangeInstanceLength := -1;
+      Request.Accept := 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8';
+      Request.BasicAuthentication := False;
+      Request.ContentType := 'application/x-www-form-urlencoded';
+    end;
+    fhttpRequest.Get(ADVInfo.TopADVInfo[1].img,imagestream);
+    imagestream.Position:=0;
+
+    with TImage.Create(Self) do
+    begin
+      Parent := Self;
+      Cursor:=crHandpoint;
+      SetBounds(0,0,100,30);
+      pngADV := tpngimage.Create;
+      pngADV.LoadFromStream(imagestream);
+      Picture.Bitmap.Assign(pngADV);
+      OnClick := UIOnClick;
+      pngADV.Free;
+    end;
+  end
+  else if ADVInfo.TopADVInfo[1].tasktype = tsgiflink then
+  begin
+    imagestream := TMemoryStream.Create();
+    fhttpRequest := TIdHTTP.Create(nil);
+    with fhttpRequest do
+    begin
+      ProtocolVersion := pv1_1;
+      AllowCookies := True;
+      ProxyParams.BasicAuthentication := False;
+      ProxyParams.ProxyPort := 0;
+      Request.ContentLength := -1;
+      Request.ContentRangeEnd := -1;
+      Request.ContentRangeStart := -1;
+      Request.ContentRangeInstanceLength := -1;
+      Request.Accept := 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8';
+      Request.BasicAuthentication := False;
+      Request.ContentType := 'application/x-www-form-urlencoded';
+    end;
+    if ADVInfo.TopADVInfo[1].img <> '' then
+      fhttpRequest.Get(ADVInfo.TopADVInfo[1].img,imagestream);
+    imagestream.Position:=0;
+
+    with TImage.Create(Self) do
+    begin
+      Parent := Self;
+      Cursor:=crHandpoint;
+      SetBounds(0,0,100,30);
+      gifADV := TGIFImage.Create;
+      imagestream.Position:=0;
+      gifADV.LoadFromStream(imagestream);
+      transparent := true;//设置背景色透明
+      Picture.Assign(gifADV);
+      TGIFImage(Picture.Graphic).Animate := True;
+      gifADV.Free;
+      OnClick := UIOnClick;
+    end
+  end;
+
+  //img := ADVInfo.TopADVInfo.img;
+  {TextLabel := TLabel.Create(self);
+  TextLabel.Parent := self;
+  TextLabel.SetBounds(0,5,100,30);
+  TextLabel.Caption := '天猫精选';
+  TextLabel.Font.Size := 12;
+  TextLabel.Font.Name := '微软雅黑';
+  TextLabel.Font.Style := [fsBold];}
+
+  {with TImage.Create(Self) do
+    begin
+      Parent := Self;
+      SetBounds(0,0,100,30);
+      Cursor:=crHandpoint;
+      gifADV := TGIFImage.Create;
+
+      FStream := TResourceStream.Create(hInstance,'test',RT_RCDATA);
+      gifADV.LoadFromStream(FStream);
+      transparent := true;//设置背景色透明
+      Picture.Assign(gifADV);
+      TGIFImage(Picture.Graphic).Animate := True;
+      gifADV.Free;
+      OnClick := UIOnClick;
+    end}
+
+  {with TImage.Create(Self) do
+  begin
+    Parent := Self;
+    SetBounds(0,0,FrmADVBodyWidth,FrmADVBodyHeight);
+    jpgADV := TJPEGImage.Create;
+    FStream := TResourceStream.Create(hInstance,'ADV_img',RT_RCDATA) ;
+    jpgADV.LoadFromStream(FStream);
+    Picture.Bitmap.Assign(jpgADV);
+    Cursor:=crHandpoint;
+    OnClick := UIOnClick;
+    jpgADV.Free;
+  end;}
+end;
+
+procedure TFTopADVBody.UIOnClick(Sender: TObject);
+var
+  taskurl: string;
+  fhttpRequest: TIdHTTP;
+  PostData : TStringStream;
+  tmpStr : String;
+  siteid: string;
+  taskid: Integer;
+begin
+  taskurl := ADVInfo.TopADVInfo[0].taskurl;
+  ShellExecute(Application.Handle, nil, PChar(taskurl), nil, nil, SW_SHOWNORMAL);
+
+  fhttpRequest := TIdHTTP.Create(nil);
+  with fhttpRequest do
+  begin
+    ProtocolVersion := pv1_1;
+    AllowCookies := True;
+    ProxyParams.BasicAuthentication := False;
+    ProxyParams.ProxyPort := 0;
+    Request.ContentLength := -1;
+    Request.ContentRangeEnd := -1;
+    Request.ContentRangeStart := -1;
+    Request.ContentRangeInstanceLength := -1;
+    Request.Accept := 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8';
+    Request.BasicAuthentication := False;
+    //Request.Ranges.Units := 'bytes';
+    Request.ContentType := 'application/x-www-form-urlencoded';
+    //HTTPOptions := [hoForceEncodeParams];
+    //HTTPOptions :=[hoKeepOrigProtocol, hoNoProtocolErrorException, hoInProcessAuth];
+  end;
+  PostData := TStringStream.Create;
+  siteid := WebInfo.id;
+  taskid := ADVInfo.TopADVInfo[0].taskid;
+  PostData.WriteString('site_id=' + siteid + '&material_id=' + inttostr(taskid));
+  tmpStr := fhttpRequest.Post(PChar(TopADVStatisticsUrl),PostData); //tmpStr是提交后返回的数据
+
+  fhttpRequest.free;
+  PostData.Free;
+end;
+
+end.

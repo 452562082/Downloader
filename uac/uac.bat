@@ -1,0 +1,1 @@
+brcc32 uac.rc -fouac.res

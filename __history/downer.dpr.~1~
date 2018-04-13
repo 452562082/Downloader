@@ -1,0 +1,193 @@
+program downer;
+{$IF CompilerVersion >= 21.0}
+{$WEAKLINKRTTI ON}
+{$RTTI EXPLICIT METHODS([]) PROPERTIES([]) FIELDS([])}
+{$IFEND}
+
+uses
+  Forms,
+  Windows,
+  SysUtils,
+  FrmMain in 'FrmMain.pas' { FFrmMain },
+  GR32 in 'Graphics32\GR32.pas',
+  GR32_Backends in 'Graphics32\GR32_Backends.pas',
+  GR32_Backends_Generic in 'Graphics32\GR32_Backends_Generic.pas',
+  GR32_Backends_VCL in 'Graphics32\GR32_Backends_VCL.pas',
+  GR32_Bindings in 'Graphics32\GR32_Bindings.pas',
+  GR32_Blend in 'Graphics32\GR32_Blend.pas',
+  GR32_Containers in 'Graphics32\GR32_Containers.pas',
+  GR32_DrawingEx in 'Graphics32\GR32_DrawingEx.pas',
+  GR32_Filters in 'Graphics32\GR32_Filters.pas',
+  GR32_Geometry in 'Graphics32\GR32_Geometry.pas',
+  GR32_Layers in 'Graphics32\GR32_Layers.pas',
+  GR32_LowLevel in 'Graphics32\GR32_LowLevel.pas',
+  GR32_Math in 'Graphics32\GR32_Math.pas',
+  GR32_MicroTiles in 'Graphics32\GR32_MicroTiles.pas',
+  GR32_OrdinalMaps in 'Graphics32\GR32_OrdinalMaps.pas',
+  GR32_Png in 'Graphics32\GR32_Png.pas',
+  GR32_Polygons in 'Graphics32\GR32_Polygons.pas',
+  GR32_PortableNetworkGraphic in 'Graphics32\GR32_PortableNetworkGraphic.pas',
+  GR32_Rasterizers in 'Graphics32\GR32_Rasterizers.pas',
+  GR32_RepaintOpt in 'Graphics32\GR32_RepaintOpt.pas',
+  GR32_Resamplers in 'Graphics32\GR32_Resamplers.pas',
+  GR32_System in 'Graphics32\GR32_System.pas',
+  GR32_Transforms in 'Graphics32\GR32_Transforms.pas',
+  GR32_VectorMaps in 'Graphics32\GR32_VectorMaps.pas',
+  GR32_XPThemes in 'Graphics32\GR32_XPThemes.pas',
+  UnitConfig in 'UnitConfig.pas',
+  UnitFuc in 'UnitFuc.pas',
+  UnitType in 'UnitType.pas',
+  MD5Unit in 'MD5Unit.pas',
+  FrmLoad in 'FrmLoad.pas' { FFrmLoad },
+  DUITaskItem in 'DUITaskItem.pas',
+  EmbeddedWB in 'units\EmbeddedWB.pas',
+  HttpDowner in 'HttpDowner.pas',
+  ThunderAgentLib_TLB in 'units\ThunderAgentLib_TLB.pas',
+  UnitLoadDll in 'UnitLoadDll.pas',
+  UnitError in 'UnitError.pas',
+  XlDownUnit in 'XlDownUnit.pas',
+  FrmInstall in 'FrmInstall.pas' { FFrmInstall },
+  RemoteModule in 'RemoteModule.pas',
+  UnitMemFuc in 'UnitMemFuc.pas',
+  UnitCompress in 'UnitCompress.pas',
+  UnitStat in 'UnitStat.pas',
+  RC4Engine in 'RC4Engine.pas',
+  IpTypes in 'IpTypes.pas',
+  FrmADV in 'FrmADV.pas' {FFrmADV},
+  FrmADVBody in 'FrmADVBody.pas' {Form2},
+  TopADVBody in 'TopADVBody.pas' {Form3};
+
+{$R *.res}
+{$R uac/uac.res}
+{$R images/images.res}
+{$IFDEF USE_XLSDK}
+{$R XL.res}
+{$ELSE}
+{$R dll/dll.res}
+{$ENDIF}
+
+var
+  prErr: Boolean;
+  prHand, prWhan: Cardinal;
+  i, iRet: Integer;
+  prStr, prUrl: string;
+  dwResult: Cardinal;
+
+begin
+  try
+    if ParamStr(1) = '-d' then
+    begin
+      bIsDebug := True;
+      BugFileName := ParamStr(0);
+    end;
+
+    prErr := not LoadWebInfo;
+    if prErr then
+      ErrorNum := S_ERR_RENAME;
+    if (not prErr) then
+    begin
+      MutexName := 'Afxdowner:' + WebInfo.id + SoftInfo.softid;
+      prHand := OpenMutex(MUTEX_ALL_ACCESS, False, PChar(MutexName));
+      if prHand <> 0 then
+      begin
+        for i := 0 to 100 do
+        begin
+          prWhan := FindWindow(PChar(MutexName), PChar(AppName));
+          if IsWindow(prWhan) then
+          begin
+            dwResult := 0;
+            SendMessageTimeout(prWhan, USER_QueryMutex, 1, 0,
+              SMTO_ABORTIFHUNG or SMTO_BLOCK, 3000, dwResult);
+            if (dwResult = 1) then
+              Exit;
+            Break;
+          end
+          else
+            Sleep(40);
+        end;
+      end;
+      hAppMutex := CreateMutex(nil, False, PChar(MutexName));
+    end;
+
+    if (not prErr) then
+    begin
+      prErr := not ArgumentInit;
+      if prErr then
+      begin
+        ErrorNum := S_ERR_ARGINIT;
+        Windows.MessageBox(0, PChar('程序初始化失败，如果杀毒软件误报，请您手动添加信任！'),
+          PChar('系统错误'), MB_OK or MB_ICONERROR);
+      end;
+    end;
+
+    if (not prErr) then
+    begin
+      Application.Initialize;
+      Application.MainFormOnTaskbar := True;
+      Application.CreateForm(TFFrmLoad, FFrmLoad);
+  Application.Run;
+    end;
+  except
+  end;
+
+  try
+    if bLoadXmlOk then
+    begin
+    end
+    else
+    begin
+      if (ErrorNum <> S_ERR_LOADCLOSE) then
+        Windows.MessageBox(0, PChar('获取软件信息失败，请确保您的网络连接正常。'), PChar('错误'),
+          MB_OK or MB_ICONWARNING);
+      prUrl := ErrorReferUrl + '?ver=' + VersionStr + '&developer=' + BoolToStr
+        (bIsDeveloper) + '&webid=' + WebInfo.id + '&softid=' +
+        SoftInfo.softid + '&errcode=' + IntToStr(ErrorNum)
+        + '&winver=' + IntToStr(SysUtils.Win32MajorVersion) + '.' + IntToStr
+        (SysUtils.Win32MinorVersion) + '&userev=' + IntToStr(hUserEV)
+        + '&rnd=' + IntToStr(Random(10000));
+
+      prStr := '';
+      for i := 0 to 3 - 1 do
+        if Trim(prStr) = '' then
+          prStr := GetWebString(prUrl, False);
+      if NeedSendStat() then
+        statManager.PushStat(sevent_error, Format('code=%d&webid=%s&softid=%s',
+            [ErrorNum, WebInfo.id, SoftInfo.softid]));
+    end;
+    if NeedSendStat() then
+    begin
+      statManager.WaitStatStop(20000);
+      statManager.SendStat(sevent_signoff, Format(
+          'step=%d&show=%s&check=%s&uncheck=%s&repeat=%s&ok=%s&error=%s&webid=%s&softid=%s'
+            , [StepNumber, Refershow, Refercheck, Referuncheck, Referrepeat,
+          Referok, Refererror, WebInfo.id, SoftInfo.softid]));
+    end;
+    //
+    if Assigned(RMManager) and (RMManager.IsLoaded) then
+    begin
+      RMManager.RMAppEnd(ExitCode);
+    end;
+    if Assigned(RMManager2) and (RMManager2.IsLoaded) then
+    begin
+      RMManager2.RMAppEnd(ExitCode);
+    end;
+  except
+  end;
+
+  try
+    if bHttpStartUp then
+    begin
+      HttpFtp_Shutdown();
+      bHttpStartUp := False;
+    end;
+    if (WorkPath <> '') and DirectoryExists(WorkPath) then
+      RemoveDirAndChildrens(WorkPath);
+    if AutoDeleteFile then
+    begin
+      if FileExists(DownloadFilePath) then
+        DeleteFile(DownloadFilePath);
+    end;
+  except
+  end;
+
+end.

@@ -1,0 +1,73 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BorlandProject>
+	<ProjectSortOrder AutoSort="0" SortType="0">
+    <File Path="Graphics32"/>
+    <File Path="Graphics32\GR32.pas"/>
+    <File Path="Graphics32\GR32_Backends.pas"/>
+    <File Path="Graphics32\GR32_Backends_Generic.pas"/>
+    <File Path="Graphics32\GR32_Backends_VCL.pas"/>
+    <File Path="Graphics32\GR32_Bindings.pas"/>
+    <File Path="Graphics32\GR32_Blend.pas"/>
+    <File Path="Graphics32\GR32_Containers.pas"/>
+    <File Path="Graphics32\GR32_DrawingEx.pas"/>
+    <File Path="Graphics32\GR32_Filters.pas"/>
+    <File Path="Graphics32\GR32_Geometry.pas"/>
+    <File Path="Graphics32\GR32_Layers.pas"/>
+    <File Path="Graphics32\GR32_LowLevel.pas"/>
+    <File Path="Graphics32\GR32_Math.pas"/>
+    <File Path="Graphics32\GR32_MicroTiles.pas"/>
+    <File Path="Graphics32\GR32_OrdinalMaps.pas"/>
+    <File Path="Graphics32\GR32_Png.pas"/>
+    <File Path="Graphics32\GR32_Polygons.pas"/>
+    <File Path="Graphics32\GR32_PortableNetworkGraphic.pas"/>
+    <File Path="Graphics32\GR32_Rasterizers.pas"/>
+    <File Path="Graphics32\GR32_RepaintOpt.pas"/>
+    <File Path="Graphics32\GR32_Resamplers.pas"/>
+    <File Path="Graphics32\GR32_System.pas"/>
+    <File Path="Graphics32\GR32_Transforms.pas"/>
+    <File Path="Graphics32\GR32_VectorMaps.pas"/>
+    <File Path="Graphics32\GR32_XPThemes.pas"/>
+    <File Path="units"/>
+    <File Path="units\EmbeddedWB.pas"/>
+    <File Path="units\ThunderAgentLib_TLB.pas"/>
+    <File Path="DUITaskItem.pas"/>
+    <File Path="FrmADV.pas"/>
+    <File Path="FrmADV.dfm"/>
+    <File Path="FrmADVBody.pas"/>
+    <File Path="FrmADVBody.dfm"/>
+    <File Path="FrmInstall.pas"/>
+    <File Path="FrmInstall.dfm"/>
+    <File Path="FrmLoad.pas"/>
+    <File Path="FrmLoad.dfm"/>
+    <File Path="FrmMain.pas"/>
+    <File Path="FrmMain.dfm"/>
+    <File Path="HttpDowner.pas"/>
+    <File Path="IpTypes.pas"/>
+    <File Path="MD5Unit.pas"/>
+    <File Path="RC4Engine.pas"/>
+    <File Path="RemoteModule.pas"/>
+    <File Path="TopADVBody.pas"/>
+    <File Path="TopADVBody.dfm"/>
+    <File Path="UnitCompress.pas"/>
+    <File Path="UnitConfig.pas"/>
+    <File Path="UnitError.pas"/>
+    <File Path="UnitFuc.pas"/>
+    <File Path="UnitLoadDll.pas"/>
+    <File Path="UnitMemFuc.pas"/>
+    <File Path="UnitStat.pas"/>
+    <File Path="UnitType.pas"/>
+    <File Path="XlDownUnit.pas"/>
+  </ProjectSortOrder>
+	<Transactions>
+    <Transaction>2017/05/27 11:25:54.760.pas,C:\Users\45256\Desktop\Source\Unit1.pas=</Transaction>
+    <Transaction>2017/05/27 11:25:54.760.dfm,C:\Users\45256\Desktop\Source\Unit1.dfm=</Transaction>
+    <Transaction>2017/05/27 11:26:35.997.pas,C:\Users\45256\Desktop\Source\Unit2.pas=C:\Users\45256\Desktop\Source\FrmADVBody.pas</Transaction>
+    <Transaction>2017/05/27 11:26:35.997.dfm,C:\Users\45256\Desktop\Source\Unit2.dfm=C:\Users\45256\Desktop\Source\FrmADVBody.dfm</Transaction>
+    <Transaction>2017/06/27 09:27:54.290.pas,C:\Users\45256\Desktop\Source\Unit3.pas=C:\Users\45256\Desktop\Source\TopADVBody.pas</Transaction>
+    <Transaction>2017/06/27 09:27:54.290.dfm,C:\Users\45256\Desktop\Source\Unit3.dfm=C:\Users\45256\Desktop\Source\TopADVBody.dfm</Transaction>
+    <Transaction>2017/06/27 09:31:46.880.pas,C:\Users\45256\Desktop\Source\Unit3.pas=C:\Users\45256\Desktop\Source\TopADVBody.pas</Transaction>
+    <Transaction>2017/06/27 09:31:46.880.dfm,C:\Users\45256\Desktop\Source\Unit3.dfm=C:\Users\45256\Desktop\Source\TopADVBody.dfm</Transaction>
+    <Transaction>2017/06/27 09:32:20.359.pas,C:\Users\45256\Desktop\Source\Unit3.pas=C:\Users\45256\Desktop\Source\TopADVBody.pas</Transaction>
+    <Transaction>2017/06/27 09:32:20.359.dfm,C:\Users\45256\Desktop\Source\Unit3.dfm=C:\Users\45256\Desktop\Source\TopADVBody.dfm</Transaction>
+  </Transactions>
+</BorlandProject>
